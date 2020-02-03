@@ -82,7 +82,7 @@ public class Parser extends Object{
    */
     private void subprogramBody(){
       subprogramSpecification();
-      accept(Token.IS, "'is' expected");
+      accept(Tokepn.IS, "'is' expected");
       declarativePart();
       accept(Token.BEGIN, "'begin' expected");
       sequenceOfStatements();
@@ -102,10 +102,21 @@ public class Parser extends Object{
        formalPart();
      }
    }
-
    /*
    formalPart = "(" parameterSpecification { ";" parameterSpecification } ")"
    */
+
+    private void formalPart(){
+      accept(Token.L_PAR, "'(' expected");
+      parameterSpecification();
+      while (token.code == Token.SEMI)
+      {
+         scanner.nextToken();
+         parameterSpecification();
+      }
+      accept(Token.R_PAR,"')' expected");
+
+    }
 
    /*
    parameterSpecification = identifierList ":" mode <type>name
@@ -116,7 +127,6 @@ public class Parser extends Object{
      accept(Token.ID, "identifer expected");
 
    }
-
    /*
    declarativePart = { basicDeclaration }
    */
@@ -167,7 +177,13 @@ public class Parser extends Object{
    /*
    typeDeclaration = "type" identifier "is" typeDefinition ";"
    */
+   private void typeDeclaration() {
+      accept(Token.TYPE, "TYPE expected");
+      accept(Token.ID, "ID expected");
+      accept(Token.IS, "IS expected");
+      typeDefinition();
 
+   }
    /*
    typeDefinition = enumerationTypeDefinition | arrayTypeDefinition
                   | range | <type>name
@@ -190,11 +206,14 @@ public class Parser extends Object{
           fatalError("error in type definition part");
      }
    }
-
    /*
    enumerationTypeDefinition = "(" identifierList ")"
    */
-
+   private void enumerationTypeDefinition(){
+     accept(Token.L_PAR, "L_PAR expected");
+     identifierList();
+     accept(Token.R_PAR, "R_PAR expected");
+   }
    /*
    arrayTypeDefinition = "array" "(" index { "," index } ")" "of" <type>name
    */
@@ -210,10 +229,20 @@ public class Parser extends Object{
      accept(Token.OF, "'of' expected");
      accept(Token.ID, "identifier expected");
    }
-
    /*
    index = range | <type>name
    */
+   private void index(){
+     switch (token.code){
+       case Token.RANGE:
+          range();
+          break;
+       case Token.ID:
+          scanner.nextToken();
+          break;
+       default: fatalError("error in index part");
+     }
+   }
 
    /*
    range = "range " simpleExpression ".." simpleExpression
@@ -225,9 +254,14 @@ public class Parser extends Object{
      simpleExpression();
    }
    /*
-   identifier { "," identifer }
+   identifierList = identifier { "," identifer }
    */
-
+   private void identifierList(){
+     accept(Token.ID, "ID expected");
+     while(toke.code == Token.COMMA){
+       accept(Token.ID, "ID expected");
+     }
+   }
    /*
    sequenceOfStatements = statement { statement }
    */
@@ -274,14 +308,24 @@ public class Parser extends Object{
      accept(Token.NULL, "'null' expected");
      accept(Token.NULL, "semicolon expected");
    }
-
    /*
    loopStatement =
          [ iterationScheme ] "loop" sequenceOfStatements "end" "loop" ";"
 
    iterationScheme = "while" condition
    */
+   private void loopStatement(){
+      if (token.code == Token.WHILE){
+         condition();
+         scanner.nextToken();
+      }
+      accept(Token.LOOP, "LOOP expected");
+      sequenceOfStatements();
+      accept(Token.END, "END expected");
+      accept(Token.LOOP, "LOOP expected");
+      accept(Token.SEMI, "SEMI expected");
 
+   }
    /*
    ifStatement =
          "if" condition "then" sequenceOfStatements
@@ -308,11 +352,16 @@ public class Parser extends Object{
      accept(Token.IF, "if expected");
      accept(Token.SEMI, "';' expected");
    }
-
    /*
    exitStatement = "exit" [ "when" condition ] ";"
    */
-
+   private void exitStatement(){
+      accept(Token.EXIT, "EXIT expected");
+      if(token.code == Token.WHEN){
+        condition();
+        scanner.nextToken();
+      }
+   }
    /*
    assignmentStatement = <variable>name ":=" expression ";"
 
@@ -361,7 +410,6 @@ public class Parser extends Object{
        simpleExpression();
      }
    }
-
    /*
   simpleExpression =
          [ unaryAddingOperator ] term { binaryAddingOperator term }
@@ -379,21 +427,26 @@ public class Parser extends Object{
    /*
    term = factor { multiplyingOperator factor }
    */
-
+   private void term(){
+      factor();
+      while(multiplyingOperator.contains(token.code)){
+        token = scanner.nextToken();
+        factor();
+      }
+   }
    /*
    factor = primary [ "**" primary ] | "not" primary
    */
    private void factor(){
-     primary();
-     if(token.code == Token.EXPO){
-       scanner.nextToken();
-       primary();
-     }else if(token.code == Token.NOT){
-       scanner.nextToken();
-       primary();
-     }
-   }
-
+    primary();
+    if(token.code == Token.EXPO){
+      scanner.nextToken();
+      primary();
+    }else if(token.code == Token.NOT){
+      scanner.nextToken();
+      primary();
+    }
+  }
    /*
    primary = numericLiteral | name | "(" expression ")"
    */
@@ -427,5 +480,12 @@ public class Parser extends Object{
    /*
    indexedComponent = "(" expression  { "," expression } ")"
    */
-
+   private void indexedComponent(){
+     accept(Token.L_PAR, "L_PAR expected");
+     expression();
+     while(token.code == Token.COMMA){
+       expression();
+     }
+     accept(Token.R_PAR, "R_PAR expected");
+   }
 }
