@@ -95,6 +95,13 @@ public class Parser extends Object{
    /*
    subprogramSpecification = "procedure" identifier [ formalPart ]
    */
+   private void subprogramSpecification(){
+     accept(Token.PROC, "'procedure expected'");
+     accept(Token.ID, "identifier expected");
+     if(token.code == Token.L_PAR){
+       formalPart();
+     }
+   }
 
    /*
    formalPart = "(" parameterSpecification { ";" parameterSpecification } ")"
@@ -103,6 +110,12 @@ public class Parser extends Object{
    /*
    parameterSpecification = identifierList ":" mode <type>name
    */
+   private void parameterSpecification(){
+     identifierList();
+     accept(Token.COLON, "colon expected");
+     accept(Token.ID, "identifer expected");
+
+   }
 
    /*
    declarativePart = { basicDeclaration }
@@ -114,7 +127,7 @@ public class Parser extends Object{
 
    /*
    basicDeclaration = objectDeclaration | numberDeclaration
-                    | typeDeclaration | subprogramBody   
+                    | typeDeclaration | subprogramBody
    */
    private void basicDeclaration(){
       switch (token.code){
@@ -159,6 +172,24 @@ public class Parser extends Object{
    typeDefinition = enumerationTypeDefinition | arrayTypeDefinition
                   | range | <type>name
    */
+   private void typeDefinition(){
+     switch (token.code){
+       case Token.L_PAR:
+          enumerationTypeDefinition();
+          break;
+       case Token.ARRAY:
+          arrayTypeDefinition();
+          break;
+       case Token.RANGE:
+          range();
+          break;
+       case Token.ID:
+          scanner.nextToken();
+          break;
+       default:
+          fatalError("error in type definition part");
+     }
+   }
 
    /*
    enumerationTypeDefinition = "(" identifierList ")"
@@ -167,6 +198,18 @@ public class Parser extends Object{
    /*
    arrayTypeDefinition = "array" "(" index { "," index } ")" "of" <type>name
    */
+   private void arrayTypeDefinition(){
+     accept(Token.ARRAY, "'array' expected");
+     accept(Token.L_PAR, "'(' expected");
+     index();
+     while(token.code == Token.COMMA){
+       scanner.nextToken();
+       index();
+     }
+     accept(Token.R_PAR, "')' expected");
+     accept(Token.OF, "'of' expected");
+     accept(Token.ID, "identifier expected");
+   }
 
    /*
    index = range | <type>name
@@ -175,7 +218,12 @@ public class Parser extends Object{
    /*
    range = "range " simpleExpression ".." simpleExpression
    */
-
+   private void range(){
+     accept(Token.RANGE, "'Range' expected");
+     simpleExpression();
+     accept(Token.THRU, "'..' expected");
+     simpleExpression();
+   }
    /*
    identifier { "," identifer }
    */
@@ -222,6 +270,10 @@ public class Parser extends Object{
    /*
    nullStatement = "null" ";"
    */
+   private void nullStatement(){
+     accept(Token.NULL, "'null' expected");
+     accept(Token.NULL, "semicolon expected");
+   }
 
    /*
    loopStatement =
@@ -237,6 +289,25 @@ public class Parser extends Object{
          [ "else" sequenceOfStatements ]
          "end" "if" ";"
    */
+   private void ifStatement(){
+     accept(Token.IF, "if expected");
+     condition();
+     accept(Token.THEN, "then expected");
+     sequenceOfStatements();
+     while(token.code == Token.ELSIF){
+       scanner.nextToken();
+       condition();
+       accept(Token.THEN, "then expected");
+       sequenceOfStatements();
+     }
+     if(token.code == Token.ELSE){
+       scanner.nextToken();
+       sequenceOfStatements();
+     }
+     accept(Token.END, "end expected");
+     accept(Token.IF, "if expected");
+     accept(Token.SEMI, "';' expected");
+   }
 
    /*
    exitStatement = "exit" [ "when" condition ] ";"
@@ -283,6 +354,13 @@ public class Parser extends Object{
    /*
    relation = simpleExpression [ relationalOperator simpleExpression ]
    */
+   private void relation(){
+     simpleExpression();
+     if(relationalOperator.contains(token.code)){
+       token = scanner.nextToken();
+       simpleExpression();
+     }
+   }
 
    /*
   simpleExpression =
@@ -305,6 +383,16 @@ public class Parser extends Object{
    /*
    factor = primary [ "**" primary ] | "not" primary
    */
+   private void factor(){
+     primary();
+     if(token.code == Token.EXPO){
+       scanner.nextToken();
+       primary();
+     }else if(token.code == Token.NOT){
+       scanner.nextToken();
+       primary();
+     }
+   }
 
    /*
    primary = numericLiteral | name | "(" expression ")"
