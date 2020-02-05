@@ -11,6 +11,9 @@ public class Parser extends Object{
    private Scanner scanner;
    private Token token;
 
+   private int callTime = 0;
+
+
    private Set<Integer> addingOperator,
                         multiplyingOperator,
                         relationalOperator,
@@ -82,7 +85,7 @@ public class Parser extends Object{
    */
     private void subprogramBody(){
       subprogramSpecification();
-      accept(Tokepn.IS, "'is' expected");
+      accept(Token.IS, "'is' expected");
       declarativePart();
       accept(Token.BEGIN, "'begin' expected");
       sequenceOfStatements();
@@ -111,7 +114,8 @@ public class Parser extends Object{
       parameterSpecification();
       while (token.code == Token.SEMI)
       {
-         scanner.nextToken();
+         token = scanner.nextToken();
+         chario.println("next parameter!");
          parameterSpecification();
       }
       accept(Token.R_PAR,"')' expected");
@@ -124,6 +128,15 @@ public class Parser extends Object{
    private void parameterSpecification(){
      identifierList();
      accept(Token.COLON, "colon expected");
+     if(token.code == Token.IN){
+       chario.println("input this");
+       token = scanner.nextToken();
+     }
+     if(token.code == Token.OUT){
+       token = scanner.nextToken();
+       chario.println("output that");
+
+     }
      accept(Token.ID, "identifer expected");
 
    }
@@ -182,7 +195,7 @@ public class Parser extends Object{
       accept(Token.ID, "ID expected");
       accept(Token.IS, "IS expected");
       typeDefinition();
-
+      accept(Token.SEMI, "semicolon expected");
    }
    /*
    typeDefinition = enumerationTypeDefinition | arrayTypeDefinition
@@ -200,7 +213,7 @@ public class Parser extends Object{
           range();
           break;
        case Token.ID:
-          scanner.nextToken();
+          token = scanner.nextToken();
           break;
        default:
           fatalError("error in type definition part");
@@ -222,7 +235,8 @@ public class Parser extends Object{
      accept(Token.L_PAR, "'(' expected");
      index();
      while(token.code == Token.COMMA){
-       scanner.nextToken();
+       token = scanner.nextToken();
+       chario.println("Reached here");
        index();
      }
      accept(Token.R_PAR, "')' expected");
@@ -238,7 +252,7 @@ public class Parser extends Object{
           range();
           break;
        case Token.ID:
-          scanner.nextToken();
+          token = scanner.nextToken();
           break;
        default: fatalError("error in index part");
      }
@@ -257,8 +271,10 @@ public class Parser extends Object{
    identifierList = identifier { "," identifer }
    */
    private void identifierList(){
-     accept(Token.ID, "ID expected");
-     while(toke.code == Token.COMMA){
+     accept(Token.ID, "ID expected!");
+     while(token.code == Token.COMMA){
+       chario.println("I'm an ID List!");
+       token = scanner.nextToken();
        accept(Token.ID, "ID expected");
      }
    }
@@ -295,6 +311,7 @@ public class Parser extends Object{
             break;
          case Token.WHILE:
          case Token.LOOP:
+            chario.println("Inside loop");
             loopStatement();
             break;
          default: fatalError("error in statement");
@@ -316,8 +333,8 @@ public class Parser extends Object{
    */
    private void loopStatement(){
       if (token.code == Token.WHILE){
-         condition();
-         scanner.nextToken();
+        token = scanner.nextToken();
+        condition();
       }
       accept(Token.LOOP, "LOOP expected");
       sequenceOfStatements();
@@ -339,13 +356,13 @@ public class Parser extends Object{
      accept(Token.THEN, "then expected");
      sequenceOfStatements();
      while(token.code == Token.ELSIF){
-       scanner.nextToken();
+       token = scanner.nextToken();
        condition();
        accept(Token.THEN, "then expected");
        sequenceOfStatements();
      }
      if(token.code == Token.ELSE){
-       scanner.nextToken();
+       token = scanner.nextToken();
        sequenceOfStatements();
      }
      accept(Token.END, "end expected");
@@ -359,7 +376,7 @@ public class Parser extends Object{
       accept(Token.EXIT, "EXIT expected");
       if(token.code == Token.WHEN){
         condition();
-        scanner.nextToken();
+        token = scanner.nextToken();
       }
    }
    /*
@@ -368,6 +385,7 @@ public class Parser extends Object{
    procedureCallStatement = <procedure>name [ actualParameterPart ] ";"
    */
    private void assignmentOrCallStatement(){
+     callTime += 1;
       name();
       if (token.code == Token.GETS){
          token = scanner.nextToken();
@@ -438,12 +456,15 @@ public class Parser extends Object{
    factor = primary [ "**" primary ] | "not" primary
    */
    private void factor(){
-    primary();
-    if(token.code == Token.EXPO){
-      scanner.nextToken();
+    if(token.code == Token.INT || token.code == Token.CHAR ||
+        token.code == Token.ID || token.code ==Token.L_PAR){
       primary();
+      if(token.code == Token.EXPO){
+        token = scanner.nextToken();;
+        primary();
+      }
     }else if(token.code == Token.NOT){
-      scanner.nextToken();
+      token = scanner.nextToken();
       primary();
     }
   }
@@ -473,8 +494,9 @@ public class Parser extends Object{
    */
    private void name(){
       accept(Token.ID, "identifier expected");
-      if (token.code == Token.L_PAR)
+      if (token.code == Token.L_PAR){
          indexedComponent();
+       }
    }
 
    /*
@@ -484,6 +506,7 @@ public class Parser extends Object{
      accept(Token.L_PAR, "L_PAR expected");
      expression();
      while(token.code == Token.COMMA){
+       token = scanner.nextToken();
        expression();
      }
      accept(Token.R_PAR, "R_PAR expected");
