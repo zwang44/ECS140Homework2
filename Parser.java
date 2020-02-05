@@ -11,8 +11,6 @@ public class Parser extends Object{
    private Scanner scanner;
    private Token token;
 
-   private int callTime = 0;
-
 
    private Set<Integer> addingOperator,
                         multiplyingOperator,
@@ -115,7 +113,6 @@ public class Parser extends Object{
       while (token.code == Token.SEMI)
       {
          token = scanner.nextToken();
-         chario.println("next parameter!");
          parameterSpecification();
       }
       accept(Token.R_PAR,"')' expected");
@@ -129,12 +126,10 @@ public class Parser extends Object{
      identifierList();
      accept(Token.COLON, "colon expected");
      if(token.code == Token.IN){
-       chario.println("input this");
        token = scanner.nextToken();
      }
      if(token.code == Token.OUT){
        token = scanner.nextToken();
-       chario.println("output that");
 
      }
      accept(Token.ID, "identifer expected");
@@ -236,7 +231,6 @@ public class Parser extends Object{
      index();
      while(token.code == Token.COMMA){
        token = scanner.nextToken();
-       chario.println("Reached here");
        index();
      }
      accept(Token.R_PAR, "')' expected");
@@ -273,7 +267,6 @@ public class Parser extends Object{
    private void identifierList(){
      accept(Token.ID, "ID expected!");
      while(token.code == Token.COMMA){
-       chario.println("I'm an ID List!");
        token = scanner.nextToken();
        accept(Token.ID, "ID expected");
      }
@@ -311,7 +304,6 @@ public class Parser extends Object{
             break;
          case Token.WHILE:
          case Token.LOOP:
-            chario.println("Inside loop");
             loopStatement();
             break;
          default: fatalError("error in statement");
@@ -385,7 +377,6 @@ public class Parser extends Object{
    procedureCallStatement = <procedure>name [ actualParameterPart ] ";"
    */
    private void assignmentOrCallStatement(){
-     callTime += 1;
       name();
       if (token.code == Token.GETS){
          token = scanner.nextToken();
