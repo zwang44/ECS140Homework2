@@ -1,7 +1,4 @@
-// Parsing shell partially completed
-
-// Note that EBNF rules are provided in comments
-// Just add new methods below rules without them
+// Role analysis completed
 
 import java.util.*;
 
@@ -10,23 +7,27 @@ public class Parser extends Object{
    private Chario chario;
    private Scanner scanner;
    private Token token;
-
+   private SymbolTable table;
 
    private Set<Integer> addingOperator,
                         multiplyingOperator,
                         relationalOperator,
                         basicDeclarationHandles,
-                        statementHandles;
+                        statementHandles,
+                        leftNames,                        // Sets of roles for names (see below)
+                        rightNames;
 
    public Parser(Chario c, Scanner s){
       chario = c;
       scanner = s;
       initHandles();
+      initTable();
       token = scanner.nextToken();
    }
 
    public void reset(){
       scanner.reset();
+      initTable();
       token = scanner.nextToken();
    }
 
@@ -56,6 +57,25 @@ public class Parser extends Object{
       statementHandles.add(Token.LOOP);
       statementHandles.add(Token.NULL);
       statementHandles.add(Token.WHILE);
+      leftNames = new HashSet<Integer>();                 // Name roles for targets of assignment statement
+      leftNames.add(SymbolEntry.PARAM);
+      leftNames.add(SymbolEntry.VAR);
+      rightNames = new HashSet<Integer>(leftNames);       // Name roles for names in expressions
+      rightNames.add(SymbolEntry.CONST);
+   }
+
+   /*
+   Two new routines for role analysis.
+   */
+
+   private void acceptRole(SymbolEntry s, int expected, String errorMessage){
+      if (s.role != SymbolEntry.NONE && s.role != expected)
+         chario.putError(errorMessage);
+   }
+
+   private void acceptRole(SymbolEntry s, Set<Integer> expected, String errorMessage){
+      if (s.role != SymbolEntry.NONE && ! (expected.contains(s.role)))
+         chario.putError(errorMessage);
    }
 
    private void accept(int expected, String errorMessage){
@@ -69,9 +89,49 @@ public class Parser extends Object{
       throw new RuntimeException("Fatal error");
    }
 
+   /*
+   Three new routines for scope analysis.
+   */
+
+   private void initTable(){
+      table = new SymbolTable(chario);
+      table.enterScope();
+      SymbolEntry entry = table.enterSymbol("BOOLEAN");
+      entry.setRole(SymbolEntry.TYPE);
+      entry = table.enterSymbol("CHAR");
+      entry.setRole(SymbolEntry.TYPE);
+      entry = table.enterSymbol("INTEGER");
+      entry.setRole(SymbolEntry.TYPE);
+      entry = table.enterSymbol("TRUE");
+      entry.setRole(SymbolEntry.CONST);
+      entry = table.enterSymbol("FALSE");
+      entry.setRole(SymbolEntry.CONST);
+   }
+
+   private SymbolEntry enterId(){
+      SymbolEntry entry = null;
+      if (token.code == Token.ID)
+         entry = table.enterSymbol(token.string);
+      else
+         fatalError("identifier expected");
+      token = scanner.nextToken();
+      return entry;
+   }
+
+   private SymbolEntry findId(){
+      SymbolEntry entry = null;
+      if (token.code == Token.ID)
+         entry = table.findSymbol(token.string);
+      else
+         fatalError("identifier expected");
+      token = scanner.nextToken();
+      return entry;
+   }
+
    public void parse(){
       subprogramBody();
       accept(Token.EOF, "extra symbols after logical end of program");
+      table.exitScope();
    }
 
    /*
@@ -81,15 +141,18 @@ public class Parser extends Object{
          "begin" sequenceOfStatements
          "end" [ <procedure>identifier ] ";"
    */
-    private void subprogramBody(){
+   private void subprogramBody(){
       subprogramSpecification();
       accept(Token.IS, "'is' expected");
       declarativePart();
       accept(Token.BEGIN, "'begin' expected");
       sequenceOfStatements();
       accept(Token.END, "'end' expected");
-      if (token.code == Token.ID)
-         token = scanner.nextToken();
+      table.exitScope();
+      if (token.code == Token.ID){
+         SymbolEntry entry = findId();
+         acceptRole(entry, SymbolEntry.PROC, "must be a procedure");
+      }
       accept(Token.SEMI, "semicolon expected");
    }
 
@@ -97,44 +160,44 @@ public class Parser extends Object{
    subprogramSpecification = "procedure" identifier [ formalPart ]
    */
    private void subprogramSpecification(){
-     accept(Token.PROC, "'procedure expected'");
-     accept(Token.ID, "identifier expected");
-     if(token.code == Token.L_PAR){
-       formalPart();
-     }
+      accept(Token.PROC, "'procedure' expected");
+      SymbolEntry entry = enterId();
+      entry.setRole(SymbolEntry.PROC);
+      table.enterScope();
+      if (token.code == Token.L_PAR)
+         formalPart();
    }
+
    /*
    formalPart = "(" parameterSpecification { ";" parameterSpecification } ")"
    */
+   private void formalPart(){
+     accept(Token.L_PAR, "'(' expected");
+     parameterSpecification();
+     while (token.code == Token.SEMI)
+     {
+        token = scanner.nextToken();
+        parameterSpecification();
+     }
+     accept(Token.R_PAR,"')' expected");
 
-    private void formalPart(){
-      accept(Token.L_PAR, "'(' expected");
-      parameterSpecification();
-      while (token.code == Token.SEMI)
-      {
-         token = scanner.nextToken();
-         parameterSpecification();
-      }
-      accept(Token.R_PAR,"')' expected");
-
-    }
+   }
 
    /*
    parameterSpecification = identifierList ":" mode <type>name
    */
    private void parameterSpecification(){
-     identifierList();
-     accept(Token.COLON, "colon expected");
-     if(token.code == Token.IN){
-       token = scanner.nextToken();
-     }
-     if(token.code == Token.OUT){
-       token = scanner.nextToken();
-
-     }
-     accept(Token.ID, "identifer expected");
-
+      SymbolEntry list = identifierList();
+      list.setRole(SymbolEntry.PARAM);
+      accept(Token.COLON, "':' expected");
+      if (token.code == Token.IN)
+         token = scanner.nextToken();
+      if (token.code == Token.OUT)
+         token = scanner.nextToken();
+      SymbolEntry entry = findId();
+      acceptRole(entry, SymbolEntry.TYPE, "must be a type");
    }
+
    /*
    declarativePart = { basicDeclaration }
    */
@@ -170,28 +233,33 @@ public class Parser extends Object{
          identifierList ":" "constant" ":=" <static>expression ";"
    */
    private void numberOrObjectDeclaration(){
-      identifierList();
+      SymbolEntry list = identifierList();
       accept(Token.COLON, "':' expected");
       if (token.code == Token.CONST){
+         list.setRole(SymbolEntry.CONST);
          token = scanner.nextToken();
          accept(Token.GETS, "':=' expected");
          expression();
       }
-      else
+      else{
+         list.setRole(SymbolEntry.VAR);
          typeDefinition();
+      }
       accept(Token.SEMI, "semicolon expected");
    }
 
    /*
    typeDeclaration = "type" identifier "is" typeDefinition ";"
    */
-   private void typeDeclaration() {
-      accept(Token.TYPE, "TYPE expected");
-      accept(Token.ID, "ID expected");
-      accept(Token.IS, "IS expected");
+   private void typeDeclaration(){
+      accept(Token.TYPE, "'type' expected");
+      SymbolEntry entry = enterId();
+      entry.setRole(SymbolEntry.TYPE);
+      accept(Token.IS, "'is' expected");
       typeDefinition();
       accept(Token.SEMI, "semicolon expected");
    }
+
    /*
    typeDefinition = enumerationTypeDefinition | arrayTypeDefinition
                   | range | <type>name
@@ -208,22 +276,26 @@ public class Parser extends Object{
           range();
           break;
        case Token.ID:
-          token = scanner.nextToken();
+          SymbolEntry entry = findId();
+          acceptRole(entry, SymbolEntry.TYPE, "must be a type");
           break;
        default:
           fatalError("error in type definition part");
      }
    }
+
    /*
    enumerationTypeDefinition = "(" identifierList ")"
    */
    private void enumerationTypeDefinition(){
-     accept(Token.L_PAR, "L_PAR expected");
-     identifierList();
-     accept(Token.R_PAR, "R_PAR expected");
+      accept(Token.L_PAR, "'(' expected");
+      SymbolEntry list = identifierList();
+      list.setRole(SymbolEntry.CONST);
+      accept(Token.R_PAR, "')' expected");
    }
+
    /*
-   arrayTypeDefinition = "array" "(" index { "," index } ")" "of" <type>name
+   arrayTypeDefinition = "array" "(" index ")" "of" <type>name
    */
    private void arrayTypeDefinition(){
      accept(Token.ARRAY, "'array' expected");
@@ -235,21 +307,23 @@ public class Parser extends Object{
      }
      accept(Token.R_PAR, "')' expected");
      accept(Token.OF, "'of' expected");
-     accept(Token.ID, "identifier expected");
+     SymbolEntry entry = findId();
+     acceptRole(entry, SymbolEntry.TYPE,"must be a type");
    }
+
    /*
    index = range | <type>name
    */
    private void index(){
-     switch (token.code){
-       case Token.RANGE:
-          range();
-          break;
-       case Token.ID:
-          token = scanner.nextToken();
-          break;
-       default: fatalError("error in index part");
-     }
+      if (token.code == Token.RANGE)
+         range();
+      else if (token.code == Token.ID){
+        /*This name must be declared somewhere before*/
+         SymbolEntry entry = findId();
+         acceptRole(entry, SymbolEntry.TYPE, "type name expected");
+      }
+      else
+         fatalError("error in index type");
    }
 
    /*
@@ -262,15 +336,17 @@ public class Parser extends Object{
      simpleExpression();
    }
    /*
-   identifierList = identifier { "," identifer }
+   identifier { "," identifer }
    */
-   private void identifierList(){
-     accept(Token.ID, "ID expected!");
-     while(token.code == Token.COMMA){
-       token = scanner.nextToken();
-       accept(Token.ID, "ID expected");
-     }
+   private SymbolEntry identifierList(){
+      SymbolEntry list = enterId();
+      while (token.code == Token.COMMA){
+         token = scanner.nextToken();
+         list.append(enterId());
+      }
+      return list;
    }
+
    /*
    sequenceOfStatements = statement { statement }
    */
@@ -315,8 +391,9 @@ public class Parser extends Object{
    */
    private void nullStatement(){
      accept(Token.NULL, "'null' expected");
-     accept(Token.NULL, "semicolon expected");
+     accept(Token.SEMI, "semicolon expected");
    }
+
    /*
    loopStatement =
          [ iterationScheme ] "loop" sequenceOfStatements "end" "loop" ";"
@@ -335,6 +412,7 @@ public class Parser extends Object{
       accept(Token.SEMI, "SEMI expected");
 
    }
+
    /*
    ifStatement =
          "if" condition "then" sequenceOfStatements
@@ -361,6 +439,7 @@ public class Parser extends Object{
      accept(Token.IF, "if expected");
      accept(Token.SEMI, "';' expected");
    }
+
    /*
    exitStatement = "exit" [ "when" condition ] ";"
    */
@@ -370,17 +449,25 @@ public class Parser extends Object{
         token = scanner.nextToken();
         condition();
       }
+      accept(Token.SEMI, "semicolon expected");
    }
+
    /*
    assignmentStatement = <variable>name ":=" expression ";"
 
    procedureCallStatement = <procedure>name [ actualParameterPart ] ";"
    */
    private void assignmentOrCallStatement(){
-      name();
+      SymbolEntry entry = name();
       if (token.code == Token.GETS){
-         token = scanner.nextToken();
-         expression();
+        /*If this condition is true, then this is a assignmentStatement,
+        which means the name() must be one of the leftNames
+        Also, leftNames passed in to acceptRole() as a set*/
+        acceptRole(entry, leftNames, "must be para or var");
+        token = scanner.nextToken();
+        expression();
+      }else{
+        acceptRole(entry, SymbolEntry.PROC, "must be a procedure name");
       }
       accept(Token.SEMI, "semicolon expected");
    }
@@ -393,8 +480,10 @@ public class Parser extends Object{
    }
 
    /*
-   expression = relation { "and" relation } | { "or" relation }
+   expression = relation [{ "and" relation } | { "or" relation }]
    */
+   /*An author's error is detected in the commented area above and it was
+   fixed by now*/
    private void expression(){
       relation();
       if (token.code == Token.AND)
@@ -413,12 +502,13 @@ public class Parser extends Object{
    relation = simpleExpression [ relationalOperator simpleExpression ]
    */
    private void relation(){
-     simpleExpression();
-     if(relationalOperator.contains(token.code)){
-       token = scanner.nextToken();
-       simpleExpression();
-     }
+      simpleExpression();
+      if (relationalOperator.contains(token.code)){
+         token = scanner.nextToken();
+         simpleExpression();
+      }
    }
+
    /*
   simpleExpression =
          [ unaryAddingOperator ] term { binaryAddingOperator term }
@@ -443,22 +533,28 @@ public class Parser extends Object{
         factor();
       }
    }
+
    /*
    factor = primary [ "**" primary ] | "not" primary
    */
    private void factor(){
-    if(token.code == Token.INT || token.code == Token.CHAR ||
-        token.code == Token.ID || token.code ==Token.L_PAR){
-      primary();
-      if(token.code == Token.EXPO){
-        token = scanner.nextToken();;
-        primary();
-      }
-    }else if(token.code == Token.NOT){
-      token = scanner.nextToken();
-      primary();
-    }
-  }
+     /*I used to put a long if statement in the front to decide
+     if the first token is Primary
+     I just found out I can reverse the grammar written order without
+     do damage to the grammar meaning
+     And this change will help with the cleaness of the code*/
+     if(token.code == Token.NOT){
+       token = scanner.nextToken();
+       primary();
+     } else {
+       primary();
+       if(token.code == Token.EXPO){
+         token = scanner.nextToken();
+         primary();
+       }
+     }
+   }
+
    /*
    primary = numericLiteral | name | "(" expression ")"
    */
@@ -466,10 +562,14 @@ public class Parser extends Object{
       switch (token.code){
          case Token.INT:
          case Token.CHAR:
+            /*I added the line below, otherwise there is a problem taking
+            int or char as an identifier which is I don't want*/
             token = scanner.nextToken();
             break;
          case Token.ID:
-            name();
+            SymbolEntry entry = name();
+            /*Primary can only be called when it is as a rightName*/
+            acceptRole(entry, rightNames, "must be var, par, or const");
             break;
          case Token.L_PAR:
             token = scanner.nextToken();
@@ -481,13 +581,13 @@ public class Parser extends Object{
    }
 
    /*
-   name = identifier [ indexedComponent ]
+   name = identifier [ indexedComponent | selectedComponent ]
    */
-   private void name(){
-      accept(Token.ID, "identifier expected");
-      if (token.code == Token.L_PAR){
+   private SymbolEntry name(){
+      SymbolEntry entry = findId();
+      if (token.code == Token.L_PAR)
          indexedComponent();
-       }
+      return entry;
    }
 
    /*
@@ -502,4 +602,4 @@ public class Parser extends Object{
      }
      accept(Token.R_PAR, "R_PAR expected");
    }
-}
+ }
