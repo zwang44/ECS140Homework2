@@ -367,8 +367,8 @@ public class Parser extends Object{
    private void exitStatement(){
       accept(Token.EXIT, "EXIT expected");
       if(token.code == Token.WHEN){
-        condition();
         token = scanner.nextToken();
+        condition();
       }
    }
    /*
