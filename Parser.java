@@ -1,4 +1,4 @@
-// Role analysis partially completed
+// Role analysis completed
 
 import java.util.*;
 
@@ -318,6 +318,7 @@ public class Parser extends Object{
       if (token.code == Token.RANGE)
          range();
       else if (token.code == Token.ID){
+        /*This name must be declared somewhere before*/
          SymbolEntry entry = findId();
          acceptRole(entry, SymbolEntry.TYPE, "type name expected");
       }
@@ -390,7 +391,7 @@ public class Parser extends Object{
    */
    private void nullStatement(){
      accept(Token.NULL, "'null' expected");
-     accept(Token.NULL, "semicolon expected");
+     accept(Token.SEMI, "semicolon expected");
    }
 
    /*
@@ -459,6 +460,9 @@ public class Parser extends Object{
    private void assignmentOrCallStatement(){
       SymbolEntry entry = name();
       if (token.code == Token.GETS){
+        /*If this condition is true, then this is a assignmentStatement,
+        which means the name() must be one of the leftNames
+        Also, leftNames passed in to acceptRole() as a set*/
         acceptRole(entry, leftNames, "must be para or var");
         token = scanner.nextToken();
         expression();
@@ -476,8 +480,10 @@ public class Parser extends Object{
    }
 
    /*
-   expression = relation { "and" relation } | { "or" relation }
+   expression = relation [{ "and" relation } | { "or" relation }]
    */
+   /*An author's error is detected in the commented area above and it was
+   fixed by now*/
    private void expression(){
       relation();
       if (token.code == Token.AND)
@@ -532,6 +538,10 @@ public class Parser extends Object{
    factor = primary [ "**" primary ] | "not" primary
    */
    private void factor(){
+     /*I used to put a long if statement in the front to decide
+     if the first token is Primary
+     just found out I can reverse the grammar written order without
+     do damage to the grammar meaning*/
      if(token.code == Token.NOT){
        token = scanner.nextToken();
        primary();
@@ -551,10 +561,13 @@ public class Parser extends Object{
       switch (token.code){
          case Token.INT:
          case Token.CHAR:
+            /*I added the line below, otherwise there is a problem taking
+            int or char as an identifier which is I don't want*/
             token = scanner.nextToken();
             break;
          case Token.ID:
             SymbolEntry entry = name();
+            /*Primary can only be called when it is as a rightName*/
             acceptRole(entry, rightNames, "must be var, par, or const");
             break;
          case Token.L_PAR:
